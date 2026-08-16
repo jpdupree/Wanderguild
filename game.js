@@ -226,6 +226,10 @@
   }
 
   function hitTarget(t, dmg, fromPlayer) {
+    if (t.isBoss) {
+      if (t !== boss) return;            // stale reference: boss already died this frame
+      if (fromPlayer) t.playerTouched = true;
+    }
     t.hp -= dmg; t.hitFlash = 0.12;
     floatText(t.x + rand(-8, 8), t.y - 24, String(Math.round(dmg)), fromPlayer ? '#fde68a' : '#fca5a5', 13);
     if (t.hp <= 0) {
@@ -325,7 +329,7 @@
   }
   function killBoss(fromPlayer) {
     burst(boss.x, boss.y, '#f87171', 40);
-    const participated = boss.playerTouched;
+    const participated = boss.playerTouched || fromPlayer;
     boss = null;
     bossBar.style.display = 'none';
     telegraphs.length = 0;
@@ -464,13 +468,14 @@
           addFeed(`<span class="who" style="color:${b.guild.color}">[${b.guild.tag}] ${b.name}:</span> ${pick(CHAT)}`);
         }
         if (b.state === 'boss' && boss) {
+          b.facing = boss.x >= b.x ? 1 : -1;
           const d = dist(b, boss);
           if (d > 120) moveToward(b, boss, b.speed, dt);
           else {
             b.atkT -= dt;
+            // hitTarget can kill the boss and null it out — touch nothing after this
             if (b.atkT <= 0) { b.atkT = rand(0.6, 1.1); hitTarget(boss, rand(6, 14), false); }
           }
-          b.facing = boss.x >= b.x ? 1 : -1;
           continue;
         }
         if (b.state === 'boss' && !boss) b.state = 'wander';
@@ -831,6 +836,17 @@
       ctx.fillText(f.text, sx(f.x), sy(f.y));
     }
     ctx.globalAlpha = 1;
+  }
+
+  // Dev hooks for automated smoke tests — only exposed with ?dev in the URL
+  if (location.search.indexOf('dev') >= 0) {
+    window.__wg = {
+      get boss() { return boss; },
+      get time() { return gameTime; },
+      spawnBossNow() { bossTimer = Math.min(bossTimer, 0.05); },
+      hurtBoss(hp) { if (boss) boss.hp = hp; },
+      tp(x, y) { player.x = x; player.y = y; player.target = null; },
+    };
   }
 
   // ─── Main loop ─────────────────────────────────────────────────
